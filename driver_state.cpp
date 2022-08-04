@@ -79,7 +79,7 @@ void render(driver_state& state, render_type type)
         data_geometry toAdd;
 
         //call generic vertex shader, use 0
-        state.vertex_shader(startingPoints.at(i),toAdd,0);
+        state.vertex_shader(startingPoints.at(i),toAdd,state.uniform_data);
         vertices.push_back(toAdd);
 
     }

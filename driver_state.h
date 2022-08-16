@@ -102,4 +102,8 @@ void clip_triangle(driver_state& state, const data_geometry& v0,
 void rasterize_triangle(driver_state& state, const data_geometry& v0,
     const data_geometry& v1, const data_geometry& v2);
 
+
+//helper function that gives plane intersection point between two points
+data_geometry giveIntersection(data_geometry a, data_geometry b);
+
 #endif

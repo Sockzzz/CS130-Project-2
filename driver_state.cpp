@@ -38,14 +38,11 @@ void initialize_render(driver_state& state, int width, int height)
         //size and layout is the same as image_color
 
     //make the whole screen black
+    //fixed initialization
+    state.image_depth = new float[width*height];
     state.image_color = new pixel[width*height];
     for(int i = 0; i < width * height; ++i){
         state.image_color[i] = make_pixel(0,0,0);
-    }
-
-    //fixed initialization
-    state.image_depth = new float[width*height];
-    for(int i = 0; i < width * height; ++i){
         state.image_depth[i] = std::numeric_limits<float>::max();
     }
 }
@@ -276,9 +273,15 @@ void rasterize_triangle(driver_state& state, const data_geometry& v0,
             double beta = area_apc / area_total;
             double gamma = area_abp / area_total;
 
-            //the z buffer point
-            point[2] = alpha*(v0.gl_Position[2]/v0.gl_Position[3]) + beta*(v1.gl_Position[2]/v1.gl_Position[3]) + gamma*(v2.gl_Position[2]/v2.gl_Position[3]);
+            //the z buffer point scalers
+            float scale_a = v0.gl_Position[2]/v0.gl_Position[3];
+            float scale_b = v1.gl_Position[2]/v1.gl_Position[3];
+            float scale_c = v2.gl_Position[2]/v2.gl_Position[3];
 
+            //this is the points true z cordinate that we can then compare to for zbuff
+            point[2] = alpha*scale_a + beta*scale_b + gamma*scale_c;
+
+            //bounds check
             if(alpha >= 0 && beta >= 0 && gamma >= 0){
 
                 //gonna get sent to the fragment shader for
@@ -286,19 +289,22 @@ void rasterize_triangle(driver_state& state, const data_geometry& v0,
                 topass.data = new float[MAX_FLOATS_PER_VERTEX];
 
 
+                //determine and set frag type
                 for(int a = 0; a < MAX_FLOATS_PER_VERTEX; ++a){
 
                     interp_type chosenOne = state.interp_rules[a];
 
                     //flat shader so we just give it the first color and it copies
-                    //might not need it at [a]
+                    //needs [a] or doesnt work for test 8, idk why
                     if(chosenOne == interp_type::flat){
                         topass.data[a] = v0.data[a];
                     }
 
+                    //incomplete
                     else if(chosenOne == interp_type::smooth){
                         //need to implement smooth later not there yet
                     }
+                    //incomplete
                     else if(chosenOne == interp_type::invalid){
                         //need to implement invalid later not there yet
                     }
@@ -306,18 +312,17 @@ void rasterize_triangle(driver_state& state, const data_geometry& v0,
                     else if(chosenOne == interp_type::noperspective){
                         topass.data[a] = alpha*v0.data[a] + beta*v1.data[a] + gamma*v2.data[a];
                     }
+                    //just in case something unintended happens
                     else{
                         exit(309);
                     }
 
                 }
 
-
+                //create this to throw it into frag shader
                 data_output out;
                 state.fragment_shader(topass,out,state.uniform_data);
 
-
-                //cout<<"image depth before: "<<*state.image_depth<<endl;
                 //compare z cordinate to buffer, if smaller than buffer, draw it and update, otherwise dont draw
                 if(state.image_depth[x+(y*state.image_width)] > point[2]) {
                     state.image_depth[x+(y*state.image_width)] = point[2];

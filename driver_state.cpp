@@ -302,11 +302,14 @@ void rasterize_triangle(driver_state& state, const data_geometry& v0,
 
                     //incomplete
                     else if(chosenOne == interp_type::smooth){
-                        //need to implement smooth later not there yet
-                    }
-                    //incomplete
-                    else if(chosenOne == interp_type::invalid){
-                        //need to implement invalid later not there yet
+                        double scalar = alpha/v0.gl_Position[3] + beta/v1.gl_Position[3] + gamma/v2.gl_Position[3];
+
+                        double alpha_s = alpha/(scalar*v0.gl_Position[3]);
+                        double beta_s = beta/(scalar*v1.gl_Position[3]);
+                        double gamma_s = gamma/(scalar*v2.gl_Position[3]);
+
+                        topass.data[a] = alpha_s*v0.data[a] + beta_s*v1.data[a] + gamma_s*v2.data[a];
+
                     }
                     //know this, need to give it the barry affected color coordinates, once for each color channel
                     else if(chosenOne == interp_type::noperspective){
@@ -314,10 +317,13 @@ void rasterize_triangle(driver_state& state, const data_geometry& v0,
                     }
                     //just in case something unintended happens
                     else{
-                        exit(309);
+                        exit(320);
                     }
 
                 }
+
+
+                // a = (b/g + c/g + d/g)*g == b + c + d
 
                 //create this to throw it into frag shader
                 data_output out;

@@ -311,13 +311,17 @@ void rasterize_triangle(driver_state& state, const data_geometry& v0,
                         topass.data[a] = alpha_s*v0.data[a] + beta_s*v1.data[a] + gamma_s*v2.data[a];
 
                     }
+                    //incomplete
+                    else if(chosenOne == interp_type::invalid){
+                        //need to implement invalid later not there yet
+                    }
                     //know this, need to give it the barry affected color coordinates, once for each color channel
                     else if(chosenOne == interp_type::noperspective){
                         topass.data[a] = alpha*v0.data[a] + beta*v1.data[a] + gamma*v2.data[a];
                     }
                     //just in case something unintended happens
                     else{
-                        exit(320);
+                        exit(309);
                     }
 
                 }

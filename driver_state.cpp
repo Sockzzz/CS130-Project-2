@@ -43,7 +43,7 @@ void initialize_render(driver_state& state, int width, int height)
     state.image_color = new pixel[width*height];
     for(int i = 0; i < width * height; ++i){
         state.image_color[i] = make_pixel(0,0,0);
-        state.image_depth[i] = std::numeric_limits<float>::max();
+        state.image_depth[i] = 1;
     }
 }
 
@@ -76,6 +76,7 @@ void render(driver_state& state, render_type type)
     }
 
     //then i call vertex shader to build data_geometry
+
     for(int i = 0; i < startingPoints.size(); ++i){
 
         data_geometry toAdd;
@@ -91,8 +92,8 @@ void render(driver_state& state, render_type type)
     //then i call rasterize, need to loop to account for multiple
     for(int i = 0; i <= vertices.size()-3; i+=3){
 
-        rasterize_triangle(state,vertices.at(i),
-                           vertices.at(i+1),vertices.at(i+2));
+        clip_triangle(state,vertices.at(i),
+                           vertices.at(i+1),vertices.at(i+2), 0);
 
     }
 
@@ -125,101 +126,145 @@ data_geometry giveIntersection(data_geometry a, data_geometry b){
 
 
 
-
-
 }
 
 
 void clip_triangle(driver_state& state, const data_geometry& v0,
     const data_geometry& v1, const data_geometry& v2,int face)
 {
-/*
-    //data_geometry has
-        //glposition vec4
-        //data pointer
 
-    //case 1: everything is inside
-    //case 2: one vertex is outside
-    //case 3: 2 vertices are outside
-    //case 4: all vertices are outside
-        //4.1: entire triangle is outside
-        //4.2: triangle is still in viewing area but vertices are outside
-
-    //check to see how many are inside
-    //range should be -1 -> 1 for both vertices
-    int needs_correction;
-
-    //easier handling for the geometry
-    vector<data_geometry> vertices;
-    vertices.push_back(v0);
-    vertices.push_back(v1);
-    vertices.push_back(v2);
-
-
-    //stores which DG are outside
-    bool OOB[3];
-
-    //stores whether the x or y or both are OOB, will have 3 bool[2]s
-    vector<bool[2]> control;
-
-    //used for laziness
-    int outside = 0;
-
-    //determining how much is out of bounds
-    for(int i = 0; i < 3; i++){
-        bool tosend[2];
-        control.push_back(tosend);
-
-        for(int j = 0; j < 2; ++ j){
-            float temp = vertices.at(i).gl_Position[j];
-
-            if(temp > 1 || temp < -1) {
-                OOB[i] = true;
-                control.at(i)[j] = true;
-            }
-            else
-                OOB[i] = false;
-                control.at(i)[j] = false;
-        }
-    }
-
-    //counts how many DG will need to be fixed
-    for(int b = 0; b < 3; ++b){
-        if(OOB[b])
-            ++outside;
-    }
-
-    if(outside == 0){
-        face = 6;
-    }
-    else if(outside == 1){
-
-        //determine which DG is outside
-        //determine if x or/and y is outside
-        //then reroute
-
-        int whichDG;
-        for(int i = 0 ; i < 3; ++i){
-            if(OOB[i])
-                whichDG = i;
-        }
-
-        //use midpoint and get the new coordinates
-        //send new coordinates + (v[i] + 1) to clip again
-
-
-    }
-
-
-    ////////////////////////////////////////////////////////////
-    if(face==6)
-    {
+    //base case
+    if(face == 6){
         rasterize_triangle(state, v0, v1, v2);
         return;
     }
-    std::cout<<"TODO: implement clipping. (The current code passes the triangle through without clipping them.)"<<std::endl;
-    clip_triangle(state,v0,v1,v2,face+1);
-    */
+
+    //grab the vertices like this
+    data_geometry A = v0;
+    data_geometry B = v1;
+    data_geometry C = v2;
+
+    // x = 0; y = 1; z = 2; w = 3
+    enum {x, y, z, w};
+
+    //all points outside, just render it
+    if(A.gl_Position[z] < -A.gl_Position[w] && B.gl_Position[z] < -B.gl_Position[w] && C.gl_Position[z] < -C.gl_Position[w]) {
+        rasterize_triangle(state, v0, v1, v2);
+        return;
+    }
+    //some in some out
+    else {
+
+        data_geometry new_triangle_1[3];
+        data_geometry new_triangle_2[3];
+
+
+
+        //check A's position
+        //if A inside: call again + increment
+        //if A is outside:
+        //send two new clip triangle functions: PBC, QBP
+
+        //our point is outside, by itself
+        if (A.gl_Position[z] < -A.gl_Position[w] && B.gl_Position[z] >= -B.gl_Position[w]
+            && C.gl_Position[z] >= -C.gl_Position[w]) {
+
+                // lam = (v1[z] - v1[w])/((v2[w] - v1[w]) + (v2[z] - v1[z]))
+                float lambda_p = (-A.gl_Position[z] - A.gl_Position[w])
+                               /(C.gl_Position[w]-A.gl_Position[w]+C.gl_Position[z]-A.gl_Position[z]);
+                float lambda_q = (-B.gl_Position[z] - B.gl_Position[w])
+                               /(-B.gl_Position[w]+A.gl_Position[w]-B.gl_Position[z]+A.gl_Position[z]);
+
+                //p = v1*lam + [(1-lam) * v2]
+                vec4 new_point_p = (C.gl_Position * lambda_p) + (1-lambda_p) * A.gl_Position;
+                vec4 new_point_q = (B.gl_Position * lambda_q) + (1-lambda_q) * A.gl_Position;
+
+                //first triangle is PBC
+                new_triangle_1[0].data = new float[MAX_FLOATS_PER_VERTEX];
+                new_triangle_1[1] = B;
+                new_triangle_1[2] = C;
+
+                //get the right type
+                for(int i = 0; i < state.floats_per_vertex; ++i){
+                    interp_type candidate = state.interp_rules[i];
+                    //nothing fancy, just map it
+                    if(candidate == interp_type::flat){
+
+                        new_triangle_1[0].data[i] = A.data[i];
+
+                    }
+                    //not sure if this is right
+                    //doesnt seem to be working right in all cases; segment fault on 21
+                    else if(candidate == interp_type::noperspective){
+                        //need altered scalar; r = p * (/same calculation as before\)
+                        float lambda_r = lambda_p * (C.gl_Position[w]
+                                / (lambda_p * C.gl_Position[w] + (1-lambda_p)*A.gl_Position[w]));
+
+                        //use altered scalar here with the data to perspective right
+                        new_triangle_1[0].data[i] = lambda_r * C.data[i] + (1-lambda_r) * A.data[i];
+
+                    }
+                    //straightforward, data[index] = (/same calculation as point\)
+                    else if(candidate == interp_type::smooth){
+
+                        new_triangle_1[0].data[i] = lambda_p * C.data[i] + (1-lambda_p) * A.data[i];
+                    }
+                }
+
+                //grab the new point throw it in there
+                new_triangle_1[0].gl_Position = new_point_p;
+                //gimme dat triangle
+                clip_triangle(state,new_triangle_1[0],new_triangle_1[1],new_triangle_1[2], face+1);
+
+
+
+                //Second Triangle is QBP
+                new_triangle_2[0].data = new float[MAX_FLOATS_PER_VERTEX];
+                new_triangle_2[1] = B;
+                new_triangle_2[2] = new_triangle_1[0];
+
+                //copy + paste of other loop
+                for(int i = 0; i < state.floats_per_vertex; ++i){
+                    interp_type candidate = state.interp_rules[i];
+                    if(candidate == interp_type::flat){
+
+                        new_triangle_2[0].data[i] = A.data[i];
+
+                    }
+
+                    //doesnt seem to be working right in all cases; segment fault on 21 but it works on one case?
+                    else if(candidate == interp_type::noperspective){
+
+                        float lambda_r = lambda_q * (A.gl_Position[w]
+                                                     / (lambda_q * A.gl_Position[w] + (1-lambda_q)*B.gl_Position[w]));
+
+                        new_triangle_2[0].data[i] = lambda_r * A.data[i] + (1-lambda_r) * B.data[i];
+
+                    }
+                    else if(candidate == interp_type::smooth){
+
+                        new_triangle_2[0].data[i] = lambda_q * A.data[i] + (1-lambda_q) * B.data[i];
+                    }
+                }
+
+                //grab point
+                new_triangle_2[0].gl_Position = new_point_q;
+                clip_triangle(state, new_triangle_2[0],new_triangle_2[1],new_triangle_2[2],face+1);
+                /*
+                A.gl_Position = new_point_p;
+
+                clip_triangle(state,B,C,A,face+1);
+
+                A.gl_Position = new_point_q;
+                clip_triangle(state,B,C,A, face+1);
+                 */
+
+            }
+        else{
+            //if A wasnt outside, increment the point over and check the next one
+            clip_triangle(state, v1, v2, v0, face+1);
+            }
+        }
 }
 
 // Rasterize the triangle defined by the three vertices in the "in" array.  This
@@ -300,7 +345,6 @@ void rasterize_triangle(driver_state& state, const data_geometry& v0,
                         topass.data[a] = v0.data[a];
                     }
 
-                    //incomplete
                     else if(chosenOne == interp_type::smooth){
                         double scalar = alpha/v0.gl_Position[3] + beta/v1.gl_Position[3] + gamma/v2.gl_Position[3];
 

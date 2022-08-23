@@ -106,4 +106,5 @@ void rasterize_triangle(driver_state& state, const data_geometry& v0,
 //helper function that gives plane intersection point between two points
 data_geometry giveIntersection(data_geometry a, data_geometry b);
 
+
 #endif

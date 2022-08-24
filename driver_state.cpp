@@ -298,6 +298,17 @@ void rasterize_triangle(driver_state& state, const data_geometry& v0,
     int max_y = fmax(y0, fmax(y1, y2));
 
 
+    //chceks bounds{
+    if(min_x<0)
+        min_x =0;
+    if(min_y<0)
+        min_y = 0;
+    if(max_x>state.image_width)
+        max_x = state.image_width;
+    if(max_y>state.image_height)
+        max_y = state.image_height;
+    //}
+
 
     for(int x = min_x; x < max_x; ++x){
         for(int y = min_y; y < max_y; ++y){
